@@ -12,23 +12,32 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.rest.client.annotation.ClientHeaderParam;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
-@Path("/1/cards")
 @RegisterRestClient
 @ClientHeaderParam(name = "Authorization", value = "{getAuthHeader}")
 public interface TrelloClient {
 
+    /**
+     * <a href="https://developer.atlassian.com/cloud/trello/guides/rest-api/authorization/#authorization-header">Trello Authorization</a>
+     */
     default String getAuthHeader(){
         final Config config = ConfigProvider.getConfig();
         return String.format("OAuth oauth_consumer_key=\"%s\", oauth_token=\"%s\"", config.getValue("trello.auth.key", String.class), config.getValue("trello.auth.token", String.class));
     }
 
+    /** 
+     * <a href="https://developer.atlassian.com/cloud/trello/rest/api-group-cards/#api-cards-post">Create Card</a>
+     */
     @POST
+    @Path("/1/cards")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     String create(String card);
 
-    @Path("{id}/attachments")
+    /**
+     * <a href="https://developer.atlassian.com/cloud/trello/rest/api-group-cards/#api-cards-id-attachments-post">Create Attachment</a>
+     */
     @POST
+    @Path("/1/cards/{id}/attachments")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     String attach(@PathParam("id") String cardId, String attachment);
