@@ -33,7 +33,7 @@ public class ETendersProcessor extends RouteBuilder{
         errorHandler(deadLetterChannel("file:errors")
             .useOriginalMessage());
 
-        from("google-mail-stream:index?labels=etenders&delay=10000").routeId("Process eTenders Email")
+        from("google-mail-stream:index?labels=etenders&delay=10000").id("process-mail")
             .idempotentConsumer(header("CamelGoogleMailId"), MemoryIdempotentRepository.memoryIdempotentRepository(10))    
             .toD("google-mail:messages/get?userId=me&id=${header.CamelGoogleMailId}")
             .process(exchange -> {
