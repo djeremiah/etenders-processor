@@ -15,6 +15,7 @@ import javax.inject.Inject;
 import com.google.api.services.gmail.model.Message;
 import com.google.common.io.BaseEncoding;
 
+import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.jackson.JacksonDataFormat;
 import org.apache.camel.support.processor.idempotent.MemoryIdempotentRepository;
@@ -43,7 +44,8 @@ public class ETendersProcessor extends RouteBuilder{
                 Matcher tenders = TENDER_PATTERN.matcher(body);
                 List<Tender> tenderList = new ArrayList<>();
                 while(tenders.find()){
-                    Tender tender = new Tender(tenders.group("subject").trim(), 
+                    Tender tender = new Tender(tenders.group("subject").trim().split(" - ")[0],
+                        tenders.group("subject").trim(), 
                         URI.create(tenders.group("uri")), 
                         LocalDate.parse(tenders.group("publicationDate").replaceAll("\\s", ""), DateTimeFormatter.ofPattern("d-M-yyyy")), 
                         ZonedDateTime.parse(tenders.group("responseDeadline").replaceAll("\\s{2,}", " ").replace("Irish time", "Europe/Dublin").trim(), DateTimeFormatter.ofPattern("d-M-yyyy HH:mm z")), 
@@ -67,8 +69,20 @@ public class ETendersProcessor extends RouteBuilder{
                     listId); 
                 exchange.getIn().setBody(card);
                 exchange.getIn().setHeader("TrelloAttachmentURL", tender.uri());
+                exchange.getIn().setHeader("TenderId", tender.id());
             })
             .marshal(json)
+            .idempotentConsumer(header("TenderId"), MemoryIdempotentRepository.memoryIdempotentRepository(20))
+            .skipDuplicate(false)
+            .filter(exchangeProperty(Exchange.DUPLICATE_MESSAGE).isEqualTo(true))
+                .process(exchange -> {
+                    exchange.getIn().setBody(trelloCardApi.search(exchange.getIn().getHeader("TenderId", String.class), boardId, "cards"));
+                })
+                .setHeader("TrelloCardId", jsonpath("$.cards[0].id"))
+                .process(exchange -> {
+                    exchange.getIn().setBody(trelloCardApi.update(exchange.getIn().getHeader("TrelloCardId", String.class), exchange.getIn().getBody(String.class)));
+                })
+            .end()
             .setBody(exchange ->
                 trelloCardApi.create(exchange.getIn().getBody(String.class))
             )
@@ -88,6 +102,7 @@ public class ETendersProcessor extends RouteBuilder{
     private static final int DUE_REMINDER_OFF = -1;
 
     record Tender(
+        String id,
         String subject,
         URI uri,
         LocalDate publicationDate,
